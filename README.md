@@ -222,14 +222,13 @@ Destructive Shizuku commands remain blocked while `CONFIRM_DESTRUCTIVE=true`.
 
 ## Configuration
 
-### Optional Gemini Conversation
+### Optional Groq Conversation
 
-NOVA can use Gemini for open-ended conversation while keeping phone controls local.
+NOVA can use Groq for open-ended conversation while keeping phone controls local.
 
-1. Create an API key at `https://aistudio.google.com/apikey`.
+1. Create an API key at `https://console.groq.com/keys`.
 2. Copy `.env.example` to `.env`.
-3. Set `GEMINI_API_KEY` in `.env`.
-4. Run `pip install -r requirements.txt` again after updating the project.
+3. Set `GROQ_API_KEY` in `.env`.
 
 ```bash
 cp .env.example .env
@@ -237,7 +236,7 @@ nano .env
 python voiceassistant.py "ask explain quantum computing simply"
 ```
 
-Use `--local-only` to disable all Gemini/network requests. Never commit or share your API key.
+Use `--local-only` to disable all Groq/network requests. Never commit or share your API key.
 
 Set environment variables to customize:
 

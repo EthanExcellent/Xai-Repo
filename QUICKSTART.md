@@ -47,12 +47,11 @@ export DEBUG=true
 Use `--no-voice` for text-only operation. Use `--local-only` to disable
 internet-dependent commands.
 
-Gemini is optional. Install it separately only if you need open-ended AI
-answers:
+Groq is optional. Set a Groq API key only if you need open-ended AI answers:
 
 ```bash
-python -m pip install --prefer-binary -r requirements-gemini.txt
-export GEMINI_API_KEY=your_key_here
+export GROQ_API_KEY=your_key_here
+export GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 ## Offline Speech Recognition

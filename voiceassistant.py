@@ -37,11 +37,6 @@ try:
 except ImportError:
     load_dotenv = None
 
-try:
-    from google import genai
-except ImportError:
-    genai = None
-
 # ============================================================================
 # LOGGING & CONFIGURATION
 # ============================================================================
@@ -54,8 +49,8 @@ class Config:
     STT_ENGINE = os.getenv("STT_ENGINE", "termux")  # or "google", "pocketsphinx"
     CONFIRM_DESTRUCTIVE = os.getenv("CONFIRM_DESTRUCTIVE", "true").lower() == "true"
     LOCAL_ONLY = os.getenv("LOCAL_ONLY", "false").lower() == "true"
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     DATA_DIR = Path.home() / ".voiceassistant"
     LOG_FILE = None
     ACTION_LOG = None
@@ -1412,23 +1407,23 @@ class GeneralCommandsModule:
         return ""
 
 
-class GeminiModule:
-    """Optional open-ended conversation through Google's Gemini API."""
+class GroqModule:
+    """Optional open-ended conversation through the Groq API."""
 
     def __init__(self, voice: VoiceOutput):
         self.voice = voice
         self.client = None
         self.conversation: List[Dict[str, str]] = []
 
-        if genai and Config.GEMINI_API_KEY and not Config.LOCAL_ONLY:
-            self.client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        if Config.GROQ_API_KEY and not Config.LOCAL_ONLY:
+            self.client = True
 
     @property
     def available(self) -> bool:
         return self.client is not None
 
     def ask(self, prompt: str) -> Optional[str]:
-        """Ask Gemini and speak the response, if configured."""
+        """Ask Groq and speak the response, if configured."""
         if not self.available:
             return None
 
@@ -1445,25 +1440,40 @@ class GeminiModule:
         )
 
         try:
-            response = self.client.models.generate_content(
-                model=Config.GEMINI_MODEL,
-                contents=f"{system}\n\nConversation:\n{transcript}",
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {Config.GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": Config.GROQ_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": transcript},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 300,
+                },
+                timeout=30,
             )
-            answer = (response.text or "I could not produce a response.").strip()
+            response.raise_for_status()
+            payload = response.json()
+            answer = payload["choices"][0]["message"]["content"].strip()
             self.conversation.append({"role": "assistant", "text": answer})
             self.conversation = self.conversation[-10:]
             self.voice.speak(answer)
             return answer
         except Exception as error:
-            logger.error("Gemini request failed: %s", error)
-            return "Gemini is unavailable right now. Check your connection and API key."
+            logger.error("Groq request failed: %s", error)
+            return "Groq is unavailable right now. Check your connection and API key."
 
     def ask_command(self, prompt: str) -> str:
         """Handle the explicit ask command with a useful configuration response."""
         answer = self.ask(prompt)
         if answer:
             return answer
-        message = "Gemini is not configured. Add GEMINI_API_KEY to your .env file."
+        message = "Groq is not configured. Add GROQ_API_KEY to your .env file."
         self.voice.speak(message)
         return message
 
@@ -1501,7 +1511,7 @@ class VoiceAssistant:
         self.smart = SmartHomeModule(self.voice_out)
         self.dev = DevToolsModule(self.voice_out)
         self.general = GeneralCommandsModule(self.voice_out)
-        self.gemini = GeminiModule(self.voice_out)
+        self.groq = GroqModule(self.voice_out)
         
         # Register commands
         self._register_commands()
@@ -1629,7 +1639,7 @@ class VoiceAssistant:
         self.parser.register("encode url", lambda p: self.general.encode_url(p.get("args", "")))
         self.parser.register("decode url", lambda p: self.general.decode_url(p.get("args", "")))
         self.parser.register("clear screen", lambda p: self.general.clear_screen(p.get("args", "")), ["clear"])
-        self.parser.register("ask", lambda p: self.gemini.ask_command(p.get("args", "")))
+        self.parser.register("ask", lambda p: self.groq.ask_command(p.get("args", "")))
         
         # System
         self.parser.register("help", lambda p: self._show_help(p.get("args", "")))
@@ -1702,9 +1712,9 @@ Voice Assistant - Complete Command List:
 🔐 SHIZUKU:
     shizuku <Android shell command>, for example: shizuku settings put system screen_brightness 100
 
-🤖 GEMINI:
+🤖 GROQ:
     ask <question> or simply speak an unrecognized question
-    Configure GEMINI_API_KEY to enable open-ended conversation.
+    Configure GROQ_API_KEY to enable open-ended conversation.
 
 Type 'help' for this menu, 'history' for action log, 'exit' to quit.
 
@@ -1729,9 +1739,9 @@ You can also speak naturally, for example:
         print("  NOVA  |  TERMUX AI ASSISTANT")
         print("=" * 62)
         print(f"  status:  ready        mode: {mode}")
-        gemini = "connected" if self.gemini.available else "not configured"
+        groq = "connected" if self.groq.available else "not configured"
         print(f"  input:   {Config.STT_ENGINE:<12} output: {voice}")
-        print(f"  Gemini:  {gemini}")
+        print(f"  Groq:    {groq}")
         print("  type 'help' for commands, 'exit' to close")
         print("=" * 62 + "\n")
     
@@ -1840,9 +1850,9 @@ You can also speak naturally, for example:
         cmd, params = self.parser.parse(text)
         
         if not cmd:
-            gemini_response = self.gemini.ask(text)
-            if gemini_response:
-                return gemini_response
+            groq_response = self.groq.ask(text)
+            if groq_response:
+                return groq_response
             response = f"Unknown command: {text}. Type 'help' for available commands."
             self.voice_out.speak(response)
             return response

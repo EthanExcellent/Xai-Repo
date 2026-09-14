@@ -33,8 +33,8 @@ python -m pip install --upgrade pip setuptools wheel
 python -m pip install --prefer-binary -r "$PROJECT_DIR/requirements.txt"
 
 echo ""
-echo "Gemini support is optional. To install it later, run:"
-echo "  python -m pip install --prefer-binary -r $PROJECT_DIR/requirements-gemini.txt"
+echo "Groq support is optional and uses the existing requests package."
+echo "Set GROQ_API_KEY before starting the assistant."
 
 # Create launcher script
 echo "Creating launcher script..."
