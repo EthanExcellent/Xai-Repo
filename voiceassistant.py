@@ -50,7 +50,7 @@ class Config:
     """Global configuration"""
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     VOICE_ENABLED = os.getenv("VOICE_ENABLED", "true").lower() == "true"
-    TTS_ENGINE = os.getenv("TTS_ENGINE", "pyttsx3")  # or "espeak"
+    TTS_ENGINE = os.getenv("TTS_ENGINE", "espeak")  # or "pyttsx3"
     STT_ENGINE = os.getenv("STT_ENGINE", "google")   # or "pocketsphinx"
     CONFIRM_DESTRUCTIVE = os.getenv("CONFIRM_DESTRUCTIVE", "true").lower() == "true"
     LOCAL_ONLY = os.getenv("LOCAL_ONLY", "false").lower() == "true"
@@ -154,9 +154,13 @@ class VoiceOutput:
         self.tts = None
         
         if engine == "pyttsx3" and pyttsx3:
-            self.tts = pyttsx3.init()
-            self.tts.setProperty('rate', 150)
-            self.tts.setProperty('volume', 0.9)
+            try:
+                self.tts = pyttsx3.init()
+                self.tts.setProperty('rate', 150)
+                self.tts.setProperty('volume', 0.9)
+            except Exception as error:
+                logger.warning("pyttsx3 unavailable, using text output: %s", error)
+                self.engine = "text"
         
         logger.info(f"Voice output initialized: {engine}")
     
@@ -1877,7 +1881,7 @@ Examples:
     parser.add_argument(
         "--voice",
         choices=["pyttsx3", "espeak"],
-        default="pyttsx3",
+        default=None,
         help="TTS engine to use"
     )
     
@@ -1907,7 +1911,8 @@ Examples:
         Config.LOCAL_ONLY = True
     if args.no_voice:
         Config.VOICE_ENABLED = False
-    Config.TTS_ENGINE = args.voice
+    if args.voice:
+        Config.TTS_ENGINE = args.voice
     Config.STT_ENGINE = args.stt
     
     # Initialize assistant

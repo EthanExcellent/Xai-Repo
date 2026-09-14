@@ -23,6 +23,10 @@ echo "Creating virtual environment..."
 python -m venv "$PROJECT_DIR/venv"
 source "$PROJECT_DIR/venv/bin/activate"
 
+# Termux provides the command-line espeak binary; pyttsx3 expects a desktop
+# shared library that is not available on Android.
+export TTS_ENGINE=espeak
+
 # Install Python packages
 echo "Installing Python packages..."
 python -m pip install --upgrade pip setuptools wheel

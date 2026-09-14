@@ -80,7 +80,7 @@ This will:
 
 ```bash
 pkg update && pkg upgrade
-pkg install python python-dev ffmpeg espeak git
+pkg install python ffmpeg espeak git
 
 cd /path/to/Xai
 python -m venv venv
