@@ -41,11 +41,18 @@ phone features.
 export VOICE_ENABLED=false
 export LOCAL_ONLY=true
 export DEBUG=true
-export GEMINI_API_KEY=your_key_here
 ```
 
 Use `--no-voice` for text-only operation. Use `--local-only` to disable
 internet-dependent commands.
+
+Gemini is optional. Install it separately only if you need open-ended AI
+answers:
+
+```bash
+python -m pip install --prefer-binary -r requirements-gemini.txt
+export GEMINI_API_KEY=your_key_here
+```
 
 ## Offline Speech Recognition
 

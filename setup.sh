@@ -28,6 +28,10 @@ echo "Installing Python packages..."
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install --prefer-binary -r "$PROJECT_DIR/requirements.txt"
 
+echo ""
+echo "Gemini support is optional. To install it later, run:"
+echo "  python -m pip install --prefer-binary -r $PROJECT_DIR/requirements-gemini.txt"
+
 # Create launcher script
 echo "Creating launcher script..."
 cat > ~/.voiceassistant/launch.sh << EOF
