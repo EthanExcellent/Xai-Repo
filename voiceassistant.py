@@ -835,6 +835,27 @@ class PhoneExtendedModule:
         self.voice.speak(msg)
         return msg
 
+    def approve_prompt(self, args: str) -> str:
+        """Approve a visible non-destructive Android prompt by safe label."""
+        requested = args.strip().casefold()
+        labels = {
+            "allow": "allow",
+            "approve": "allow",
+            "accept": "allow",
+            "ok": "ok",
+            "okay": "ok",
+            "continue": "continue",
+            "confirm": "confirm",
+            "next": "next",
+            "done": "done",
+            "enable": "enable",
+            "open": "open",
+        }
+        target = labels.get(requested, requested)
+        if target not in set(labels.values()):
+            return "Approval is limited to allow, OK, continue, confirm, next, done, enable, or open"
+        return self.tap_text(target)
+
     def long_press_text(self, args: str) -> str:
         """Find visible Android UI text and long-press its center."""
         target = args.strip()
@@ -915,6 +936,40 @@ class PhoneExtendedModule:
             return "Usage: scroll up|down"
         result = ShizukuBridge.run(swipes[direction])
         msg = result if result.startswith("Shizuku ") else f"Scrolled {direction}"
+        self.voice.speak(msg)
+        return msg
+
+    def swipe(self, args: str) -> str:
+        """Perform a standard screen swipe without requiring coordinates."""
+        direction = args.strip().lower()
+        swipes = {
+            "left": "input swipe 900 1000 180 1000 400",
+            "right": "input swipe 180 1000 900 1000 400",
+            "up": "input swipe 540 1500 540 500 400",
+            "down": "input swipe 540 500 540 1500 400",
+        }
+        if direction not in swipes:
+            return "Usage: swipe left|right|up|down"
+        result = ShizukuBridge.run(swipes[direction])
+        msg = result if result.startswith("Shizuku ") else f"Swiped {direction}"
+        self.voice.speak(msg)
+        return msg
+
+    def system_panel(self, args: str) -> str:
+        """Open common Android system panels."""
+        panels = {
+            "quick settings": "am start -a android.settings.panel.action.QUICK_SETTINGS",
+            "internet": "am start -a android.settings.panel.action.INTERNET_CONNECTIVITY",
+            "volume": "am start -a android.settings.panel.action.VOLUME",
+            "brightness": "am start -a android.settings.panel.action.BRIGHTNESS",
+            "notifications": "cmd statusbar expand-notifications",
+            "power menu": "input keyevent 26",
+        }
+        panel = args.strip().lower()
+        if panel not in panels:
+            return "Usage: open panel quick settings|internet|volume|brightness|notifications|power menu"
+        result = ShizukuBridge.run(panels[panel])
+        msg = result if result.startswith("Shizuku ") else f"Opened {panel}"
         self.voice.speak(msg)
         return msg
 
@@ -1403,6 +1458,27 @@ class DevToolsModule:
 class GeneralCommandsModule:
     """Broad local commands that work without extra cloud services."""
 
+    APP_PACKAGES = {
+        "youtube": "com.google.android.youtube",
+        "whatsapp": "com.whatsapp",
+        "telegram": "org.telegram.messenger",
+        "gmail": "com.google.android.gm",
+        "chrome": "com.android.chrome",
+        "google chrome": "com.android.chrome",
+        "firefox": "org.mozilla.firefox",
+        "spotify": "com.spotify.music",
+        "maps": "com.google.android.apps.maps",
+        "google maps": "com.google.android.apps.maps",
+        "camera": "com.sec.android.app.camera",
+        "settings": "com.android.settings",
+        "calculator": "com.sec.android.app.popupcalculator",
+        "calendar": "com.google.android.calendar",
+        "clock": "com.sec.android.app.clockpackage",
+        "photos": "com.google.android.apps.photos",
+        "play store": "com.android.vending",
+        "files": "com.google.android.documentsui",
+    }
+
     def __init__(self, voice: VoiceOutput):
         self.voice = voice
 
@@ -1492,14 +1568,15 @@ class GeneralCommandsModule:
             return self._say(f"Open this URL in your browser: {url}")
 
     def open_app(self, args: str) -> str:
-        package = args.strip()
-        if not package:
+        requested = args.strip().lower()
+        package = self.APP_PACKAGES.get(requested, args.strip())
+        if not requested:
             return self._say("Usage: open app <package.name>")
         try:
             subprocess.run(["monkey", "-p", package, "1"], check=True, capture_output=True)
-            return self._say(f"Opened {package}")
+            return self._say(f"Opened {requested}")
         except (FileNotFoundError, subprocess.CalledProcessError):
-            return self._say(f"Could not open {package}; check the package name")
+            return self._say(f"Could not open {requested}; check that the app is installed")
 
     def network_info(self, args: str) -> str:
         try:
@@ -1701,11 +1778,14 @@ class VoiceAssistant:
         self.parser.register("dnd", lambda p: self.phone_ext.dnd_mode(p.get("args", "")), ["do not disturb"])
         self.parser.register("tap", lambda p: self.phone_ext.tap_screen(p.get("args", "")), ["tap screen", "click"])
         self.parser.register("click text", lambda p: self.phone_ext.tap_text(p.get("args", "")), ["click", "press", "select"])
+        self.parser.register("approve", lambda p: self.phone_ext.approve_prompt(p.get("args", "")), ["allow", "confirm", "continue"])
         self.parser.register("long press", lambda p: self.phone_ext.long_press_text(p.get("args", "")))
         self.parser.register("type", lambda p: self.phone_ext.type_text(p.get("args", "")))
         self.parser.register("press key", lambda p: self.phone_ext.key_action(p.get("args", "")))
         self.parser.register("navigation", lambda p: self.phone_ext.navigation(p.get("args", "")))
         self.parser.register("scroll", lambda p: self.phone_ext.scroll(p.get("args", "")))
+        self.parser.register("swipe", lambda p: self.phone_ext.swipe(p.get("args", "")))
+        self.parser.register("open panel", lambda p: self.phone_ext.system_panel(p.get("args", "")))
         
         # Calls
         self.parser.register("call", lambda p: self.calls.make_call(p.get("args", "")), ["make call", "dial"])
@@ -1867,7 +1947,8 @@ Voice Assistant - Complete Command List:
 
 🧰 LOCAL TOOLS:
     time, date, uptime, storage, memory, pwd, list files [path]
-    find text <pattern>|<directory>, open <url>, open app <package>
+    find text <pattern>|<directory>, open <url>, open app <name/package>
+    open YouTube, WhatsApp, Telegram, Gmail, Chrome, Maps, Spotify, Settings
     network, ping <host>, notify <message>
     clipboard get, clipboard set <text>, encode/decode url, clear
 
@@ -1877,6 +1958,7 @@ Voice Assistant - Complete Command List:
     press key <enter|escape|backspace|volume up|volume down>
     play, pause, next track, previous track
     go back, go home, recent apps, scroll up, scroll down
+    allow, continue, confirm, approve, done, enable
 
 🔐 SHIZUKU:
     shizuku <Android shell command>, for example: shizuku settings put system screen_brightness 100
@@ -1983,11 +2065,15 @@ You can also speak naturally, for example:
             (r"^(?:turn|make) volume (up|down)$", "volume key"),
             (r"^(?:play|pause|skip|go to) (music|next track|previous track)$", "press key"),
             (r"^(?:click|tap|press|select) (?:on |the )?(.+)$", "click text"),
+            (r"^(allow|approve|confirm|continue|accept|enable|open)(?: (?:it|that|this|the prompt))?$", "approve"),
+            (r"^(?:click|press|select) (allow|ok|okay|continue|confirm|next|done|enable|open)$", "approve"),
             (r"^(?:go )?back$", "navigation back"),
             (r"^(?:go )?home$", "navigation home"),
             (r"^(?:show )?(?:recent apps|recents)$", "navigation recent"),
             (r"^scroll (up|down)$", "scroll"),
             (r"^(?:swipe|scroll) (up|down)$", "scroll"),
+            (r"^swipe (left|right)$", "swipe"),
+            (r"^(?:open|show) (quick settings|internet|volume|brightness|notifications|power menu)$", "open panel"),
             (r"^(?:what is|check|show) (?:my )?battery(?: level| status)?$", "battery"),
             (r"^(?:show|read|check) (?:my )?notifications?$", "read notifications"),
             (r"^(?:play|start) (?:some )?music(?: by (.+))?$", "play music"),
@@ -1999,6 +2085,7 @@ You can also speak naturally, for example:
             (r"^(?:send|text) (?:a )?message to (.+?): (.+)$", "send sms"),
             (r"^(?:message|text) (.+?) on whatsapp saying (.+)$", "whatsapp"),
             (r"^(?:open|launch) (?:the )?(.+?) app$", "open app"),
+            (r"^(?:open|launch) (youtube|whatsapp|telegram|gmail|chrome|google chrome|firefox|spotify|maps|google maps|camera|settings|calculator|calendar|clock|photos|play store|files)$", "open app"),
             (r"^(?:take|capture) (?:a )?screenshot$", "screenshot"),
             (r"^(?:open|launch) (?:the )?app (.+)$", "open app"),
             (r"^(?:open|visit|browse) (https?://\S+|[a-z0-9.-]+\.[a-z]{2,}\S*)$", "open"),
@@ -2054,6 +2141,8 @@ You can also speak naturally, for example:
                 return f"tap {groups[0]} {groups[1]}"
             if command == "click text":
                 return f"click text {groups[0]}"
+            if command == "approve":
+                return f"approve {groups[0]}" if groups else "approve allow"
             if command == "long press":
                 return f"long press {groups[0]}"
             if command == "type":
@@ -2062,6 +2151,10 @@ You can also speak naturally, for example:
                 return f"press key {groups[0]}"
             if command == "volume key":
                 return f"press key volume {groups[0]}"
+            if command == "swipe":
+                return f"swipe {groups[0]}"
+            if command == "open panel":
+                return f"open panel {groups[0]}"
             if command.startswith("navigation "):
                 return command
             if command == "call" or command == "open app" or command == "open":
