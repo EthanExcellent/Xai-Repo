@@ -51,7 +51,7 @@ class Config:
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     VOICE_ENABLED = os.getenv("VOICE_ENABLED", "true").lower() == "true"
     TTS_ENGINE = os.getenv("TTS_ENGINE", "espeak")  # or "pyttsx3"
-    STT_ENGINE = os.getenv("STT_ENGINE", "google")   # or "pocketsphinx"
+    STT_ENGINE = os.getenv("STT_ENGINE", "termux")  # or "google", "pocketsphinx"
     CONFIRM_DESTRUCTIVE = os.getenv("CONFIRM_DESTRUCTIVE", "true").lower() == "true"
     LOCAL_ONLY = os.getenv("LOCAL_ONLY", "false").lower() == "true"
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -212,6 +212,9 @@ class VoiceInput:
     
     def listen(self, timeout: int = 10, phrase_time_limit: int = 10) -> Optional[str]:
         """Listen for voice input and return recognized text"""
+        if self.engine == "termux":
+            return self._termux_speech_to_text(timeout)
+
         if not self.recognizer:
             return self._fallback_input()
         
@@ -234,6 +237,33 @@ class VoiceInput:
         except Exception as e:
             logger.error(f"Voice input error: {e}")
             return None
+
+    def _termux_speech_to_text(self, timeout: int) -> Optional[str]:
+        """Use Android's speech recognizer through Termux:API."""
+        if not shutil.which("termux-speech-to-text"):
+            logger.warning("termux-speech-to-text not found; install the Termux:API package")
+            return None
+
+        try:
+            result = subprocess.run(
+                ["termux-speech-to-text"],
+                capture_output=True,
+                text=True,
+                timeout=max(timeout, 1) + 5,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("Speech recognition timed out")
+            return None
+
+        if result.returncode != 0:
+            logger.error("Termux speech recognition failed: %s", (result.stderr or "").strip())
+            return None
+
+        text = result.stdout.strip()
+        if text:
+            logger.info("Recognized: %s", text)
+        return text or None
     
     def _fallback_input(self) -> str:
         """Fallback to text input if voice unavailable"""
@@ -1887,8 +1917,8 @@ Examples:
     
     parser.add_argument(
         "--stt",
-        choices=["google", "pocketsphinx"],
-        default="google",
+        choices=["termux", "google", "pocketsphinx"],
+        default=None,
         help="STT engine to use"
     )
     
@@ -1913,7 +1943,8 @@ Examples:
         Config.VOICE_ENABLED = False
     if args.voice:
         Config.TTS_ENGINE = args.voice
-    Config.STT_ENGINE = args.stt
+    if args.stt:
+        Config.STT_ENGINE = args.stt
     
     # Initialize assistant
     assistant = VoiceAssistant()

@@ -271,13 +271,16 @@ export CONFIRM_DESTRUCTIVE=false
 ## Troubleshooting
 
 ### "Microphone not found"
-- Check Termux has microphone permission
-- Grant permission: Settings → Apps → Termux → Permissions → Microphone
+- Install the separate **Termux:API** Android app
+- Run `pkg install termux-api`
+- Grant Termux microphone permission in Android settings
+- Test with `termux-speech-to-text`
 
 ### "Speech recognition failed"
-- Ensure internet connection (for Google API)
-- Or run with `--local-only` for offline mode
-- Or install `pocketsphinx` for local STT
+- The default engine is Android's Termux:API recognizer and needs the Termux:API app
+- Test with `python voiceassistant.py --stt termux`
+- Google recognition requires internet: `python voiceassistant.py --stt google`
+- Pocketsphinx is optional and may require a native Android build
 
 ### "Termux:API not working"
 - Install the **Termux:API** app (separate from Termux)

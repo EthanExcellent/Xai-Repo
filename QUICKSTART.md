@@ -29,6 +29,7 @@ Install the separate Termux:API app, then run:
 
 ```bash
 pkg install termux-api
+termux-speech-to-text
 ```
 
 Grant microphone and Termux:API permissions when Android asks. These are

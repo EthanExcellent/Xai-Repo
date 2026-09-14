@@ -13,7 +13,7 @@ pkg update -y
 
 # Install Python and dependencies
 echo "Installing Python and dependencies..."
-pkg install -y python ffmpeg espeak git
+pkg install -y python ffmpeg espeak git termux-api
 
 # Keep the launcher separate from the project directory.
 mkdir -p ~/.voiceassistant
