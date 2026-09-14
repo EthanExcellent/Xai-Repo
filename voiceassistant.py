@@ -13,7 +13,9 @@ import time
 import threading
 import shutil
 import urllib.parse
+import shlex
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Dict, List, Optional, Callable, Any
 from functools import wraps
@@ -767,6 +769,152 @@ class PhoneExtendedModule:
         state = args.strip().lower()
         result = ShizukuBridge.run(f"cmd notification set_dnd {'on' if state == 'on' else 'off'}")
         msg = result if result.startswith("Shizuku ") else f"Do Not Disturb turned {state}"
+        self.voice.speak(msg)
+        return msg
+
+    def tap_screen(self, args: str) -> str:
+        """Tap screen coordinates through Shizuku."""
+        values = args.replace(",", " ").split()
+        if len(values) != 2:
+            return "Usage: tap <x> <y>"
+        try:
+            x, y = (int(value) for value in values)
+        except ValueError:
+            return "Usage: tap <x> <y>"
+        if x < 0 or y < 0 or x > 10000 or y > 10000:
+            return "Tap coordinates must be between 0 and 10000"
+
+        result = ShizukuBridge.run(f"input tap {x} {y}")
+        msg = result if result.startswith("Shizuku ") else f"Tapped screen at {x}, {y}"
+        self.voice.speak(msg)
+        return msg
+
+    def tap_text(self, args: str) -> str:
+        """Find visible Android UI text or content description and tap it."""
+        target = args.strip()
+        if not target:
+            return "Usage: click <visible text>"
+
+        dump = ShizukuBridge.run(
+            "uiautomator dump /sdcard/nova-ui.xml >/dev/null 2>&1; "
+            "cat /sdcard/nova-ui.xml"
+        )
+        if dump.startswith("Shizuku "):
+            return dump
+
+        try:
+            root = ET.fromstring(dump)
+        except ET.ParseError:
+            return "Could not read the Android screen. Make sure Shizuku is connected."
+
+        wanted = target.casefold()
+        candidates = []
+        for node in root.iter("node"):
+            text = (node.attrib.get("text") or "").strip()
+            description = (node.attrib.get("content-desc") or "").strip()
+            label = text or description
+            if not label or node.attrib.get("visible-to-user", "true") == "false":
+                continue
+            score = 0 if label.casefold() == wanted else 1 if wanted in label.casefold() else None
+            if score is None:
+                continue
+            bounds = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]$", node.attrib.get("bounds", ""))
+            if bounds:
+                candidates.append((score, label, bounds.groups()))
+
+        if not candidates:
+            return f"I could not find '{target}' on the current screen."
+
+        _, label, coordinates = sorted(candidates, key=lambda item: item[0])[0]
+        left, top, right, bottom = (int(value) for value in coordinates)
+        x, y = (left + right) // 2, (top + bottom) // 2
+        result = ShizukuBridge.run(f"input tap {x} {y}")
+        if result.startswith("Shizuku "):
+            return result
+        msg = f"Clicked {label}"
+        self.voice.speak(msg)
+        return msg
+
+    def long_press_text(self, args: str) -> str:
+        """Find visible Android UI text and long-press its center."""
+        target = args.strip()
+        if not target:
+            return "Usage: long press <visible text>"
+        dump = ShizukuBridge.run(
+            "uiautomator dump /sdcard/nova-ui.xml >/dev/null 2>&1; "
+            "cat /sdcard/nova-ui.xml"
+        )
+        if dump.startswith("Shizuku "):
+            return dump
+        try:
+            root = ET.fromstring(dump)
+        except ET.ParseError:
+            return "Could not read the Android screen. Make sure Shizuku is connected."
+
+        wanted = target.casefold()
+        for node in root.iter("node"):
+            label = (node.attrib.get("text") or node.attrib.get("content-desc") or "").strip()
+            bounds = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]$", node.attrib.get("bounds", ""))
+            if not label or not bounds or wanted not in label.casefold():
+                continue
+            left, top, right, bottom = (int(value) for value in bounds.groups())
+            x, y = (left + right) // 2, (top + bottom) // 2
+            result = ShizukuBridge.run(f"input swipe {x} {y} {x} {y} 900")
+            if result.startswith("Shizuku "):
+                return result
+            msg = f"Long-pressed {label}"
+            self.voice.speak(msg)
+            return msg
+        return f"I could not find '{target}' on the current screen."
+
+    def type_text(self, args: str) -> str:
+        """Type text into the currently focused Android field."""
+        text = args.strip()
+        if not text:
+            return "Usage: type <text>"
+        encoded = text.replace("%", "%25").replace(" ", "%s")
+        result = ShizukuBridge.run(f"input text {shlex.quote(encoded)}")
+        msg = result if result.startswith("Shizuku ") else "Text entered"
+        self.voice.speak(msg)
+        return msg
+
+    def key_action(self, args: str) -> str:
+        """Send a safe Android key action through Shizuku."""
+        actions = {
+            "enter": 66, "return": 66, "escape": 111, "backspace": 67,
+            "volume up": 24, "volume down": 25, "play": 126,
+            "pause": 127, "next track": 87, "previous track": 88,
+        }
+        action = args.strip().lower()
+        if action not in actions:
+            return "Usage: press key <enter|escape|backspace|volume up|volume down|play|pause|next track|previous track>"
+        result = ShizukuBridge.run(f"input keyevent {actions[action]}")
+        msg = result if result.startswith("Shizuku ") else f"Pressed {action}"
+        self.voice.speak(msg)
+        return msg
+
+    def navigation(self, args: str) -> str:
+        """Send common Android navigation key events through Shizuku."""
+        action = args.strip().lower()
+        keycodes = {"back": 4, "home": 3, "recent": 187, "recents": 187}
+        if action not in keycodes:
+            return "Usage: navigation back|home|recent"
+        result = ShizukuBridge.run(f"input keyevent {keycodes[action]}")
+        msg = result if result.startswith("Shizuku ") else f"Pressed {action}"
+        self.voice.speak(msg)
+        return msg
+
+    def scroll(self, args: str) -> str:
+        """Scroll the current Android screen through Shizuku."""
+        direction = args.strip().lower()
+        swipes = {
+            "up": "input swipe 540 1500 540 500 400",
+            "down": "input swipe 540 500 540 1500 400",
+        }
+        if direction not in swipes:
+            return "Usage: scroll up|down"
+        result = ShizukuBridge.run(swipes[direction])
+        msg = result if result.startswith("Shizuku ") else f"Scrolled {direction}"
         self.voice.speak(msg)
         return msg
 
@@ -1551,6 +1699,13 @@ class VoiceAssistant:
         self.parser.register("screen timeout", lambda p: self.phone_ext.screen_timeout(p.get("args", "")))
         self.parser.register("rotation lock", lambda p: self.phone_ext.rotation_lock(p.get("args", "")))
         self.parser.register("dnd", lambda p: self.phone_ext.dnd_mode(p.get("args", "")), ["do not disturb"])
+        self.parser.register("tap", lambda p: self.phone_ext.tap_screen(p.get("args", "")), ["tap screen", "click"])
+        self.parser.register("click text", lambda p: self.phone_ext.tap_text(p.get("args", "")), ["click", "press", "select"])
+        self.parser.register("long press", lambda p: self.phone_ext.long_press_text(p.get("args", "")))
+        self.parser.register("type", lambda p: self.phone_ext.type_text(p.get("args", "")))
+        self.parser.register("press key", lambda p: self.phone_ext.key_action(p.get("args", "")))
+        self.parser.register("navigation", lambda p: self.phone_ext.navigation(p.get("args", "")))
+        self.parser.register("scroll", lambda p: self.phone_ext.scroll(p.get("args", "")))
         
         # Calls
         self.parser.register("call", lambda p: self.calls.make_call(p.get("args", "")), ["make call", "dial"])
@@ -1716,6 +1871,13 @@ Voice Assistant - Complete Command List:
     network, ping <host>, notify <message>
     clipboard get, clipboard set <text>, encode/decode url, clear
 
+🖱️ UI CONTROL (requires Shizuku):
+    click <visible text>, press <visible text>, select <visible text>
+    long press <visible text>, type <text>
+    press key <enter|escape|backspace|volume up|volume down>
+    play, pause, next track, previous track
+    go back, go home, recent apps, scroll up, scroll down
+
 🔐 SHIZUKU:
     shizuku <Android shell command>, for example: shizuku settings put system screen_brightness 100
 
@@ -1800,12 +1962,43 @@ You can also speak naturally, for example:
             (r"^(?:how much )?(?:free )?memory(?: do i have)?$", "memory"),
             (r"^(?:show|list|read) (?:my )?(?:files|file list)$", "list files"),
             (r"^(?:turn|switch) (wifi|wi fi) (on|off)$", "wifi"),
-            (r"^(?:turn|switch) (?:the )?flashlight (on|off)$", "flashlight"),
+            (r"^(?:turn|switch) (?:the )?bluetooth (on|off)$", "bluetooth"),
+            (r"^(?:turn|switch) (?:the )?(?:flashlight|torch) (on|off)$", "flashlight"),
+            (r"^(?:turn|switch) (on|off) (?:the )?(?:my )?(?:flashlight|torch)(?: on my phone)?$", "flashlight"),
+            (r"^(?:turn|switch) (?:my )?(?:mobile data|cellular data) (on|off)$", "mobile data"),
+            (r"^(?:turn|switch) (on|off) (?:my )?(?:mobile data|cellular data)$", "mobile data"),
+            (r"^(?:turn|switch) (?:airplane mode|flight mode) (on|off)$", "airplane mode"),
+            (r"^(?:turn|switch) (on|off) (?:airplane mode|flight mode)$", "airplane mode"),
             (r"^(?:set )?brightness to (\d+)$", "brightness"),
+            (r"^(?:set|change) (?:the )?volume to (\d+)(?: percent)?$", "volume"),
+            (r"^(?:set|change) (?:the )?screen timeout to (\d+) seconds?$", "screen timeout"),
+            (r"^(?:turn|switch) (?:screen rotation|rotation lock) (on|off)$", "rotation lock"),
+            (r"^(?:turn|switch) (?:do not disturb|dnd) (on|off)$", "dnd"),
+            (r"^(?:take|capture) (?:a )?screenshot$", "screenshot"),
+            (r"^(?:tap|click) (\d+)\s+(\d+)$", "tap"),
+            (r"^(?:tap|click) (?:the )?(?:screen )?(?:at )?(\d+)\s*(?:,|and|by|x)\s*(\d+)$", "tap"),
+            (r"^(?:long press|hold down|press and hold) (?:on |the )?(.+)$", "long press"),
+            (r"^(?:type|enter|write) (.+)$", "type"),
+            (r"^(?:press|hit) (enter|return|escape|backspace)$", "press key"),
+            (r"^(?:turn|make) volume (up|down)$", "volume key"),
+            (r"^(?:play|pause|skip|go to) (music|next track|previous track)$", "press key"),
+            (r"^(?:click|tap|press|select) (?:on |the )?(.+)$", "click text"),
+            (r"^(?:go )?back$", "navigation back"),
+            (r"^(?:go )?home$", "navigation home"),
+            (r"^(?:show )?(?:recent apps|recents)$", "navigation recent"),
+            (r"^scroll (up|down)$", "scroll"),
+            (r"^(?:swipe|scroll) (up|down)$", "scroll"),
+            (r"^(?:what is|check|show) (?:my )?battery(?: level| status)?$", "battery"),
+            (r"^(?:show|read|check) (?:my )?notifications?$", "read notifications"),
             (r"^(?:play|start) (?:some )?music(?: by (.+))?$", "play music"),
             (r"^(?:set )?(?:a )?timer for (\d+) minutes?$", "timer"),
             (r"^(?:remind me to|remember to) (.+?)(?: at| on) (.+)$", "reminder"),
             (r"^(?:make|place) (?:a )?call to (.+)$", "call"),
+            (r"^(?:call|dial) (.+)$", "call"),
+            (r"^(?:send|text) (?:a )?message to (.+?) saying (.+)$", "send sms"),
+            (r"^(?:send|text) (?:a )?message to (.+?): (.+)$", "send sms"),
+            (r"^(?:message|text) (.+?) on whatsapp saying (.+)$", "whatsapp"),
+            (r"^(?:open|launch) (?:the )?(.+?) app$", "open app"),
             (r"^(?:take|capture) (?:a )?screenshot$", "screenshot"),
             (r"^(?:open|launch) (?:the )?app (.+)$", "open app"),
             (r"^(?:open|visit|browse) (https?://\S+|[a-z0-9.-]+\.[a-z]{2,}\S*)$", "open"),
@@ -1813,6 +2006,11 @@ You can also speak naturally, for example:
             (r"^(?:calculate|work out|what is) (\d+(?:\.\d+)?) percent of (\d+(?:\.\d+)?)$", "calculate percent"),
             (r"^(?:calculate|work out|what is) ([0-9+\-*/(). %]+)$", "calculate"),
             (r"^(?:write down|make a note|note that|remember) (.+)$", "note"),
+            (r"^(?:show|read) my notes?$", "read notes"),
+            (r"^(?:add|create) (?:a )?task (.+)$", "task"),
+            (r"^(?:play|start) (?:a )?podcast (.+)$", "podcast"),
+            (r"^(?:what is|show) now playing$", "now playing"),
+            (r"^(?:open|visit) (.+)$", "open"),
             (r"^(?:show|read) (?:my )?notifications?$", "read notifications"),
             (r"^(?:check|show) (?:my )?(?:phone )?status$", "system"),
         ]
@@ -1826,16 +2024,46 @@ You can also speak naturally, for example:
                 return f"weather {groups[0]}" if groups else "weather"
             if command == "wifi" or command == "flashlight":
                 return f"{command} {groups[-1]}"
+            if command in ("bluetooth", "rotation lock", "dnd"):
+                return f"{command} {groups[-1]}"
+            if command == "mobile data" or command == "airplane mode":
+                return f"{command} {groups[-1]}"
             if command == "brightness" or command == "timer":
                 return f"{command} {groups[-1]}"
+            if command == "screen timeout":
+                return f"screen timeout {groups[0]}"
+            if command == "volume":
+                return f"volume {groups[0]}"
             if command == "reminder":
                 return f"reminder {groups[1]}|{groups[0]}"
             if command == "play music":
                 return f"play music {groups[0]}" if groups else "play music"
             if command == "calculate" or command == "note" or command == "search":
                 return f"{command} {groups[0]}"
+            if command == "send sms":
+                return f"send sms {groups[0]}|{groups[1]}"
+            if command == "whatsapp":
+                return f"whatsapp {groups[0]}|{groups[1]}"
+            if command == "task":
+                return f"task {groups[0]}"
+            if command == "podcast":
+                return f"podcast {groups[0]}"
             if command == "calculate percent":
                 return f"calculate {groups[0]}*{groups[1]}/100"
+            if command == "tap":
+                return f"tap {groups[0]} {groups[1]}"
+            if command == "click text":
+                return f"click text {groups[0]}"
+            if command == "long press":
+                return f"long press {groups[0]}"
+            if command == "type":
+                return f"type {groups[0]}"
+            if command == "press key":
+                return f"press key {groups[0]}"
+            if command == "volume key":
+                return f"press key volume {groups[0]}"
+            if command.startswith("navigation "):
+                return command
             if command == "call" or command == "open app" or command == "open":
                 return f"{command} {groups[0]}"
             return command
