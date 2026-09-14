@@ -50,7 +50,7 @@ class Config:
     CONFIRM_DESTRUCTIVE = os.getenv("CONFIRM_DESTRUCTIVE", "true").lower() == "true"
     LOCAL_ONLY = os.getenv("LOCAL_ONLY", "false").lower() == "true"
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
     DATA_DIR = Path.home() / ".voiceassistant"
     LOG_FILE = None
     ACTION_LOG = None
@@ -1464,7 +1464,14 @@ class GroqModule:
             self.conversation = self.conversation[-10:]
             self.voice.speak(answer)
             return answer
-        except Exception as error:
+        except requests.HTTPError as error:
+            detail = error.response.text[:300] if error.response is not None else str(error)
+            logger.error("Groq request failed for model %s: %s", Config.GROQ_MODEL, detail)
+            return (
+                f"Groq rejected model {Config.GROQ_MODEL}. "
+                "Set GROQ_MODEL to an available Groq model."
+            )
+        except (requests.RequestException, KeyError, ValueError) as error:
             logger.error("Groq request failed: %s", error)
             return "Groq is unavailable right now. Check your connection and API key."
 

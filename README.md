@@ -229,6 +229,7 @@ NOVA can use Groq for open-ended conversation while keeping phone controls local
 1. Create an API key at `https://console.groq.com/keys`.
 2. Copy `.env.example` to `.env`.
 3. Set `GROQ_API_KEY` in `.env`.
+4. Confirm `GROQ_MODEL` is an available model in your Groq console.
 
 ```bash
 cp .env.example .env
@@ -237,6 +238,10 @@ python voiceassistant.py "ask explain quantum computing simply"
 ```
 
 Use `--local-only` to disable all Groq/network requests. Never commit or share your API key.
+
+If Groq returns a 404, the selected model is usually unavailable. Change
+`GROQ_MODEL` in `.env` to an active model shown in the Groq console, then restart
+the assistant.
 
 Set environment variables to customize:
 

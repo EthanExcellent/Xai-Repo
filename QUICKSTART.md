@@ -51,7 +51,7 @@ Groq is optional. Set a Groq API key only if you need open-ended AI answers:
 
 ```bash
 export GROQ_API_KEY=your_key_here
-export GROQ_MODEL=llama-3.3-70b-versatile
+export GROQ_MODEL=llama-3.1-8b-instant
 ```
 
 ## Offline Speech Recognition
