@@ -13,7 +13,7 @@ pkg update -y
 
 # Install Python and dependencies
 echo "Installing Python and dependencies..."
-pkg install -y python python-dev ffmpeg espeak git
+pkg install -y python ffmpeg espeak git
 
 # Keep the launcher separate from the project directory.
 mkdir -p ~/.voiceassistant
@@ -25,8 +25,8 @@ source "$PROJECT_DIR/venv/bin/activate"
 
 # Install Python packages
 echo "Installing Python packages..."
-pip install --upgrade pip
-pip install -r "$PROJECT_DIR/requirements.txt"
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install --prefer-binary -r "$PROJECT_DIR/requirements.txt"
 
 # Create launcher script
 echo "Creating launcher script..."
