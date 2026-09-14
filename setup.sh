@@ -32,6 +32,11 @@ echo "Installing Python packages..."
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install --prefer-binary -r "$PROJECT_DIR/requirements.txt"
 
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+	cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+	echo "Created $PROJECT_DIR/.env; add your GROQ_API_KEY before using Groq."
+fi
+
 echo ""
 echo "Groq support is optional and uses the existing requests package."
 echo "Set GROQ_API_KEY before starting the assistant."

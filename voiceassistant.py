@@ -33,7 +33,7 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().with_name(".env"))
 except ImportError:
     load_dotenv = None
 
@@ -49,7 +49,7 @@ class Config:
     STT_ENGINE = os.getenv("STT_ENGINE", "termux")  # or "google", "pocketsphinx"
     CONFIRM_DESTRUCTIVE = os.getenv("CONFIRM_DESTRUCTIVE", "true").lower() == "true"
     LOCAL_ONLY = os.getenv("LOCAL_ONLY", "false").lower() == "true"
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     DATA_DIR = Path.home() / ".voiceassistant"
     LOG_FILE = None
